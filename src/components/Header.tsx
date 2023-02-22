@@ -102,13 +102,13 @@ const Header: React.FC<HeaderProps> = () => {
                   onChange={toggleExpanded}
                 />
                 {/* logo (desktop) */}
-                <Link href="/">
+                {/* <Link href="/">
                   <img
                     className="hidden sm:inline-block h-7 mr-4 cursor-pointer dark:invert"
                     src={config.logo}
                     alt="logo"
                   />
-                </Link>
+                </Link> */}
                 {/* nav (mobile) */}
                 <animated.div
                   className="sm:hidden absolute left-0 right-0 top-[50px] bg-white dark:bg-zinc-900/100 z-10 border-b border-zinc-400/10 overflow-hidden"

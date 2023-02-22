@@ -1,14 +1,14 @@
 import { FiGithub, FiLink } from 'react-icons/fi'
 
 const config = {
-  name: 'xiaojun',
-  title: "xiaojun's blog",
-  desc: '为什么不问问神奇海螺 🐚 呢？',
-  avatar: '/avatar.png',
-  logo: '/logo.svg', // header 左侧 logo
+  name: 'Wongchisum',
+  title: "Wongchisum's blog",
+  desc: '求祂把诗与火赐予我',
+  avatar: '/logo.png',
+  // logo: '/logo.png', // header 左侧 logo
   socials: [
-    { label: 'Github', icon: <FiGithub className="text-lg" aria-hidden />, link: 'https://github.com/imzxj' },
-    { label: '友链', icon: <FiLink className="text-lg" aria-hidden />, link: '/blogroll' },
+    { label: 'Github', icon: <FiGithub className="text-lg" aria-hidden />, link: 'https://github.com/wongchisum' },
+    { label: '友情链接', icon: <FiLink className="text-lg" aria-hidden />, link: '/blogroll' },
   ],
   blogroll: [
     { name: '赖同学', link: 'https://www.laibh.com' },

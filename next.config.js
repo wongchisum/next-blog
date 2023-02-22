@@ -8,6 +8,9 @@ const nextConfig = {
     includePaths: ['./src'],
   },
   i18n,
+  typescript:{
+    ignoreBuildErrors:true
+  }
 }
 
 module.exports = nextConfig

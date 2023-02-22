@@ -16,9 +16,9 @@ const Index: NextPageWithCustomProps = () => {
   return (
     <div className={classNames('container py-12', style.about)}>
       <h2>关于本站</h2>
-      <p>//Todo</p>
+      <p>Todo...</p>
       <h2>关于我</h2>
-      <p>//Todo</p>
+      <p>Todo...</p>
       <h2>找到我</h2>
       <ul>
         <li>

@@ -16,18 +16,26 @@ const Index: NextPageWithCustomProps = () => {
   return (
     <div className={classNames('container py-12', style.about)}>
       <h2>关于本站</h2>
-      <p>Todo...</p>
+      <p>记录个人的经历，包括但不局限于工作、影音、动画、生活</p>
       <h2>关于我</h2>
-      <p>Todo...</p>
+      <p>业余的鸡尾酒和威士忌爱好者</p>
+      <p>三流的前端工程师</p>
+      <p>健忘的人</p>
       <h2>找到我</h2>
       <ul>
         <li>
           Email - <Link href="mailto:im.wongch1sum@gmail.com">邮箱</Link>
         </li>
         <li>
-          Github -{' '}
+        Github -{' '}
           <Link href="https://github.com/wongchisum" target="_blank">
             Github
+          </Link>
+        </li>
+        <li>
+        Facebook -{' '}
+          <Link href="https://www.facebook.com/chisum.wong.5249" target="_blank">
+          Facebook
           </Link>
         </li>
         <li>

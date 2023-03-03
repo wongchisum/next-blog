@@ -1,0 +1,114 @@
+---
+title: 'React 控制异步并发的实现'
+date: '2023-03-03 15:27:01'
+tags:
+  - '前端'
+  - 'React Hooks'
+---
+
+
+## 背景
+
+最近有一个业务需求，需要前端批量获取某个列表的数据，利用该列表数据的 `id` 去查询相对应的详情数据`detail`，输出为 Excel 报表。
+
+由于数据量比较多，期望前端这边增加进度条展示，让用户感知此时任务的进度。
+
+## 需求拆解
+
+获取列表的所有 `id`，通过一次请求可以实现，比较取巧的做法是通过查询列表接口将 `page_size` (每页展示条数)，往大了写
+
+通过 所有 `id` 去查询 `detail`,这个过程理论上列表有N条需要查询N次，通过循环的方式可以解。
+
+```typescript 
+// 伪代码
+const ids  = [1,2,3] // 已收集的id 
+
+// 进行异步请求
+const getUserDetail(id:number) {
+  const result = await fetch(`...`)
+  const data = result.json()
+  return data
+}
+
+let detailList = []; // 保存用户详情
+let restCount = ids.length; // 保存剩余的任务数量
+
+// ES9 for await 语法
+for wait (const id of ids) {
+  const detail = getUserDetail(id); 
+  restCount -=1;
+  if (detail) {
+    detailList.push(detail)
+  }
+}
+
+```
+
+`for await` 虽然可以解，但是这样每个请求都是顺序的，理论上处理N条数据，每条T秒，耗时 `N * T`秒。不是一个最佳解法
+
+### 通过 Promise.all 解决
+
+```typescript
+// 伪代码
+const ids  = [1,2,3] // 已收集的id 
+
+// 进行异步请求
+const getUserDetail(id:number) {
+  const result = await fetch(`...`)
+  const data = result.json()
+  return data
+}
+
+
+const result = await Promise.all(ids.map(id => getUserDetail))
+```
+
+`Promise.all` 提供了并发，能够节省一些请求的时间。
+
+但缺点在于：我们无法得知剩余的任务数量，以及我们无法控制并发数，在数量较大的情况下，会造成请求的堵塞。
+
+## 想法
+
+既要通过并发去优化请求的时间，又需要增加并发的限制数，且需要在并发执行的过程中去计算任务的数量。
+
+一个思路是通过拆分的方式去创造一个异步任务。
+
+我们可以尝试增加一个 `limit` 变量，去作为并发的限制，增加一个 `taskIndex` 去作为当前任务的索引值
+
+主要的计算公式就是
+
+```typescript
+  const currentTask = [...tasks].slice(taskIndex,limit) // 截取当前需要执行的任务
+```
+
+>> 本质上是通过 `taskIndex` 作为依赖项，去循环触发 `useEffect`时间 ，
+>> 每一次循环 `useEffect` 事件调用 `runTask` 方法，截取需要异步执行的任务。
+>> 执行完毕后再更新 `taskIndex`,直到没有需要处理的参数
+
+```typescript
+// 伪代码
+
+let tasks = []; // 请求参数
+const promiseCallback = () => {}; // 异步请求函数
+const limit = 1; // 默认设置的最大并发数为1
+let taskIndex = 0; // 任务的索引
+let restCount = tasks.length; // 剩余的任务数量
+
+const runTask = () => {
+  const currentTask = [...tasks].slice(taskIndex,limit) // 截取当前需要执行的任务
+  const result = await Promise.all(currentTask.map(task => promiseCallback(task))); // 并发请求
+
+  // 更新索引值
+  taskIndex += limit;
+}
+
+```
+
+
+## 解决
+
+通过实际编码实现，封装成 `useAsyncPool` 这个React Hooks
+
+可以查看我的 npm 包地址:<a href="https://www.npmjs.com/package/react-use-async-pool" target="_blank">npm包</a>
+
+查看我的 Github 仓库:<a href="https://github.com/TonicFizzRicky/react-use-async-pool" target="_blank">Github 仓库</a>

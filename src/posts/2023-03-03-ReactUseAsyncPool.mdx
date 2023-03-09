@@ -1,27 +1,28 @@
 ---
-title: 'React 控制异步并发的实现'
+title: '在 React 控制异步并发请求数的实现'
 date: '2023-03-03 15:27:01'
 tags:
   - '前端'
   - 'React Hooks'
 ---
 
-
 ## 背景
 
-最近有一个业务需求，需要前端批量获取某个列表的数据，利用该列表数据的 `id` 去查询相对应的详情数据`detail`，输出为 Excel 报表。
+最近有一个业务需求，需要前端批量获取某个列表的数据。
+
+利用该列表数据的 `id` 字段去查询相对应的详情数据 `detail`，输出为 Excel 报表。
 
 由于数据量比较多，期望前端这边增加进度条展示，让用户感知此时任务的进度。
 
 ## 需求拆解
 
-获取列表的所有 `id`，通过一次请求可以实现，比较取巧的做法是通过查询列表接口将 `page_size` (每页展示条数)，往大了写
+获取列表的所有 `id`，通过一次请求可以实现，比较取巧的做法是通过查询列表接口将 `page_size` (每页展示条数)，往大了写。
 
-通过 所有 `id` 去查询 `detail`,这个过程理论上列表有N条需要查询N次，通过循环的方式可以解。
+通过 所有 `id` 去查询 `detail`,这个过程理论上列表有 N 条需要查询 N 次，通过循环的方式可以解。
 
-```typescript 
+```typescript
 // 伪代码
-const ids  = [1,2,3] // 已收集的id 
+const ids  = [1,2,3] // 已收集的id
 
 // 进行异步请求
 const getUserDetail(id:number) {
@@ -35,7 +36,7 @@ let restCount = ids.length; // 保存剩余的任务数量
 
 // ES9 for await 语法
 for wait (const id of ids) {
-  const detail = getUserDetail(id); 
+  const detail = getUserDetail(id);
   restCount -=1;
   if (detail) {
     detailList.push(detail)
@@ -44,13 +45,13 @@ for wait (const id of ids) {
 
 ```
 
-`for await` 虽然可以解，但是这样每个请求都是顺序的，理论上处理N条数据，每条T秒，耗时 `N * T`秒。不是一个最佳解法
+`for await` 虽然可以解，但是这样每个请求都是顺序的，理论上处理 N 条数据，每条 T 秒，耗时 `N * T`秒。不是一个最佳解法
 
 ### 通过 Promise.all 解决
 
 ```typescript
 // 伪代码
-const ids  = [1,2,3] // 已收集的id 
+const ids  = [1,2,3] // 已收集的id
 
 // 进行异步请求
 const getUserDetail(id:number) {
@@ -71,44 +72,191 @@ const result = await Promise.all(ids.map(id => getUserDetail))
 
 既要通过并发去优化请求的时间，又需要增加并发的限制数，且需要在并发执行的过程中去计算任务的数量。
 
-一个思路是通过拆分的方式去创造一个异步任务。
+一个思路是通过拆分的方式去创造一个异步任务，将一个大的 Promise.all 任务拆分成若干个小的 Promise.all 任务。
 
 我们可以尝试增加一个 `limit` 变量，去作为并发的限制，增加一个 `taskIndex` 去作为当前任务的索引值
 
 主要的计算公式就是
 
 ```typescript
-  const currentTask = [...tasks].slice(taskIndex,limit) // 截取当前需要执行的任务
+const currentTask = [...tasks].slice(taskIndex, limit) // 截取当前需要执行的任务
 ```
 
->> 本质上是通过 `taskIndex` 作为依赖项，去循环触发 `useEffect`时间 ，
->> 每一次循环 `useEffect` 事件调用 `runTask` 方法，截取需要异步执行的任务。
->> 执行完毕后再更新 `taskIndex`,直到没有需要处理的参数
+> > 本质上是通过 `taskIndex` 作为依赖项，去循环触发 `useEffect`事件 ，每一次循环 `useEffect` 事件调用 `runTask` 方法，截取需要异步执行的任务。执行完毕后再更新 `taskIndex`,直到没有需要处理的参数
 
 ```typescript
 // 伪代码
 
-let tasks = []; // 请求参数
-const promiseCallback = () => {}; // 异步请求函数
-const limit = 1; // 默认设置的最大并发数为1
-let taskIndex = 0; // 任务的索引
-let restCount = tasks.length; // 剩余的任务数量
+let tasks = [] // 请求参数
+const promiseCallback = () => {} // 异步请求函数
+const limit = 1 // 默认设置的最大并发数为1
+let taskIndex = 0 // 任务的索引
+let restCount = tasks.length // 剩余的任务数量
 
 const runTask = () => {
-  const currentTask = [...tasks].slice(taskIndex,limit) // 截取当前需要执行的任务
-  const result = await Promise.all(currentTask.map(task => promiseCallback(task))); // 并发请求
+  const currentTask = [...tasks].slice(taskIndex, limit) // 截取当前需要执行的任务
+  const result = await Promise.all(currentTask.map(task => promiseCallback(task))) // 并发请求
 
   // 更新索引值
-  taskIndex += limit;
+  taskIndex += limit
+}
+```
+
+## 解决
+
+通过实际编码实现，封装成 `useAsyncPool` 这个 React Hooks
+
+具体的编码实现比较简单，中心思想还是把大的任务拆分为小的，然后 useEffect 去循环，直到所有任务结束
+
+```typescript
+import { useEffect, useState } from 'react';
+import type { IHookReturn, IOptions } from './typing';
+
+export function useAsyncPool<T = unknown, U = unknown>(options: IOptions<T, U>): IHookReturn<U> {
+  const { list = [], fn = () => {}, limit = 1 } = options;
+
+  const [data, setData] = useState<U[]>([]); // Promise运行后的数据
+  const [taskIndex, setTaskIndex] = useState(0); // 当前任务的索引
+  const [loading, setLoading] = useState(false); // 是否加载中
+
+  // 获取需要进行的任务，通过Promise.all 进行包装
+  const handleResolve = async () => {
+    // 获取需要处理的队列
+    const tasks = [...list].splice(taskIndex, limit);
+
+    // 构造Promise.all,进行并发请求
+    const result = (await Promise.all(tasks.map(task => fn(task)))) as U[];
+
+    // 更新数据
+    await setData((total: U[]) => {
+      return [...total, ...result];
+    });
+
+    // 更新Index
+    await setTaskIndex((currentIndex: number) => currentIndex + limit);
+  };
+
+  // 点击执行
+  const handleRun = () => {
+    if (!loading) {
+      setTaskIndex(0);
+      setData([]);
+      setLoading(true);
+    }
+  };
+
+  // 计算剩余数量
+  const pendingCount = list.length - data.length;
+
+  // 计算完成数量
+  const doneCount = data.length;
+
+  // 任务完成时，任务结束
+  const handleUpdateBegin = () => {
+    const { length: dataLength } = data;
+    const { length: listLength } = list;
+    const hasData = dataLength > 0;
+    const hasList = listLength > 0;
+    if (hasData && hasList && dataLength === listLength) {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    handleUpdateBegin();
+  }, [data]);
+
+  useEffect(() => {
+    if (loading && taskIndex < list.length) {
+      handleResolve();
+    }
+  }, [loading, taskIndex]);
+
+  return {
+    run: handleRun,
+    data,
+    loading,
+    pendingCount,
+    doneCount,
+  };
 }
 
 ```
 
+Github 仓库: <a href="https://github.com/TonicFizzRicky/react-use-async-pool" target="_blank">Github 仓库</a>
 
-## 解决
+useAsyncPool 文档: <a href="https://react-use-async-pool.netlify.app/" target="_blank">文档</a>
 
-通过实际编码实现，封装成 `useAsyncPool` 这个React Hooks
+npm 包地址: <a href="https://www.npmjs.com/package/react-use-async-pool" target="_blank">npm 包</a>
 
-可以查看我的 npm 包地址:<a href="https://www.npmjs.com/package/react-use-async-pool" target="_blank">npm包</a>
 
-查看我的 Github 仓库:<a href="https://github.com/TonicFizzRicky/react-use-async-pool" target="_blank">Github 仓库</a>
+## 优化
+
+尽管开发 `useAsyncPool` 这个npm 包实现了上述的需求，但依然有一些不足需要解决:
+
+### 缺少容错
+
+  直接通过 `async await` 获取异步数据，最好还要用 `try catch` 包一下，做异常的处理和数据的容错。
+
+### 心智负担太大
+
+举个例子，还是回到最初提到的那个例子，获取 `list`，通过 `list` 的 `id` 查询 接口A。
+
+假设后期需求变更，请求完接口A之后，还需要用接口A的 `uid` 字段再去请求 B 接口。
+
+流程就变成了:
+
+```
+list -> 请求接口A -> 请求接口B
+```
+
+那么伪代码可能是这样的:
+
+
+```typescript
+import {useAsyncPool} from 'my-pkg'
+import {useEffect} from 'react'
+
+// list id
+const ids = [1,2,3,4]
+
+// A接口异步请求
+const requestA = () => {}
+
+// B接口异步请求
+const requestB = () => {}
+
+const Demo = () => {
+  // 通过 ids 请求接口A 
+  const {data=[],loading,run} = useAsyncPool({fn:requestA,list:ids,limit:2}) 
+
+  // 获取uid
+  const uids = (data??[]).map(item => item.uid)
+
+  // 通过 接口A的uid字段请求接口B
+  const {data:dataB,loading,run:runB} = useAsyncPool
+
+  // A接口请求完成时，再去请求B接口数据
+  useEffect(() => {
+    if (!loading && data.length>0) {
+      runB()
+    }
+  },[data,loading])
+
+  return (
+    <button onClick={run}>开始任务</button>
+  )
+}
+```
+
+那B接口请求完再请求C接口呢？我们会发现心智负担出现了：
+
+开发者需要通过 *useEffect + 条件判断* 去判断当前进行的任务是否完成，能否进行下一个任务。
+
+这个心智负担是不应该由开发者去承担的，后续的版本可能会考虑一些优化方向:
+
+1.一个组件创建多个 useAsyncPool,由单一实例的类 Pool 去进行任务调度。这样可以将代码抽取得更干净
+
+2.useAsyncPool 增加一个配置项 dependency:T[],作用是通过当前任务的加载状态和数据完整程度，去判断下一个任务是否执行。
+
+3.实现一个 useTasks，用于控制对串联任务的调度，比如接口A请求完再请求B，这样的任务调度是否可以描述

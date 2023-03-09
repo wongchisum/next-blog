@@ -39,7 +39,7 @@ const TableOfContents: React.FC<TableOfContentsProps> = props => {
   return withNativeProps(
     props,
     <aside className="absolute left-full h-full ml-16">
-      <ul className="sticky top-[10vh] list-none max-w-[250px] max-h-[80vh] overflow-scroll before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-zinc-400/30">
+      <ul className="sticky top-[10vh] list-none max-w-[250px] max-h-[80vh] overflow-auto before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-zinc-400/30">
         {headings.map(heading => (
           <li
             key={heading.id}
